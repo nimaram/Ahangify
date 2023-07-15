@@ -1,0 +1,10 @@
+# NimAwk
+.vscode
+.idea
+.env
+env
+venv
+*.log
+
+# caches
+*/__pycache__
