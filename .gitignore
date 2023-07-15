@@ -8,3 +8,4 @@ venv
 
 # caches
 */__pycache__
+__pycache__
