@@ -1,4 +1,4 @@
-from models.models import Song
+from schemas.models import SongSchema as Song
 from database import create_song
 from fastapi import HTTPException, status, APIRouter
 

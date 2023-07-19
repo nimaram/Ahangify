@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import song
+from routers import auth
 
 # App object
 app = FastAPI()
-app.include_router(song.router, tags=['song'])
+app.include_router(auth.router, tags=['users'])
 
 origins = ["https://localhost:8000"]
 
