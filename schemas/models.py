@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, EmailStr, validator
 from pydantic_core.core_schema import FieldValidationInfo
 from fastapi import Path
+from beanie import Indexed
 from typing import Optional
 
 # Song part 
@@ -24,10 +25,10 @@ class AlbumSchema(BaseModel):
 
 # Account part 
 class UserSignUpSchema(BaseModel):
-    username: str
-    email: EmailStr
-    password: str = Field(title="Password", max_length=50, min_length=5)
-    repeated_password: str = Field(title="RepeatedPassword", max_length=50, min_length=5)
+    username: Indexed(str, unique=True)
+    email: Indexed(EmailStr, unique=True)
+    password: str = Field(title="Password", max_length=100, min_length=5)
+    repeated_password: str = Field(title="RepeatedPassword", max_length=100, min_length=5)
     user_type: Optional[str] = Field("normal", tile="UserType", max_length=10)
 
     @validator('repeated_password')
@@ -44,3 +45,15 @@ class UserSignUpSchema(BaseModel):
             "password": "123456",
             "user_type": "normal"
         }
+
+
+class UserDB(BaseModel):
+    username: str
+    email: str
+    password: str
+    user_type: str
+
+
+class TokenPayload(BaseModel):
+    account: str = None
+    exp: int = None
