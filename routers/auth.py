@@ -1,13 +1,20 @@
 from fastapi import HTTPException, status, APIRouter, Body, Depends
 from schemas.models import UserSignUpSchema, UserDB
 from database import UsersCollection
+from jose import jwt, JWTError
 from auth.hash import get_password_hash
 from typing import Annotated
 from database import check_repeated_username_or_email
 from fastapi.security import OAuth2PasswordRequestForm
 from auth.jwt_handler import (
     login_for_access_token,
-    get_current_user
+    get_current_user,
+    JWT_ALGORITHM,
+    JWT_SECRET,
+    TokenPayload,
+    get_user,
+    create_access_token,
+    create_refresh_token
 )
 
 
@@ -45,6 +52,21 @@ async def user_sign_in(form_data: Annotated[OAuth2PasswordRequestForm, Depends()
     return response
 
 
-@router.get("/api/test-token", tags=["users"], status_code=status.HTTP_200_OK)
-async def test_token(current_user: Annotated[UserDB, Depends(get_current_user)]):
-    return current_user.email
+@router.post("/api/refresh-token", tags=["users"], status_code=status.HTTP_200_OK)
+async def refresh_token(refresh_token: str = Body(...)):
+    try:
+        payload = jwt.decode(refresh_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        token_data = TokenPayload(**payload)
+    except JWTError:
+        raise HTTPException(detail="Invalid token", status_code=status.HTTP_403_FORBIDDEN) 
+    user = await get_user(email=token_data.account)
+    if not user:
+        raise HTTPException(detail="Invalid token for user", status_code=status.HTTP_404_NOT_FOUND)
+    return {
+        "access_token": create_access_token({"account": user.email}),
+        "refresh_token": create_refresh_token({"account": user.email})
+    }
+
+@router.get("/api/get-user-type", tags=["users"], status_code=status.HTTP_200_OK, summary="This api returns account's type")
+async def get_user_type(current_user: Annotated[UserDB, Depends(get_current_user)]):
+    return current_user.user_type
