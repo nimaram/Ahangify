@@ -1,19 +1,19 @@
 from pydantic import BaseModel, Field, EmailStr, validator
-from pydantic_core.core_schema import FieldValidationInfo
 from fastapi import Path
-from beanie import Indexed
 from typing import Optional
 
 # Song part 
 
 class SongSchema(BaseModel):
     title: str
+    slug: str
     description: Optional[str | None] = Field(None, title="Description of the song")
     file: str
     duration: float = Path(gt=0, title="Duration")
     listeners: int = Path(ge=0, title="Listeners")
     singer: list = []
     producer: Optional[list | None] = None
+    uploaded_by: Optional[str]
 
 class AlbumSchema(BaseModel):
     name: str
@@ -25,8 +25,8 @@ class AlbumSchema(BaseModel):
 
 # Account part 
 class UserSignUpSchema(BaseModel):
-    username: Indexed(str, unique=True)
-    email: Indexed(EmailStr, unique=True)
+    username: str
+    email: EmailStr
     password: str = Field(title="Password", max_length=100, min_length=5)
     repeated_password: str = Field(title="RepeatedPassword", max_length=100, min_length=5)
     user_type: Optional[str] = Field("normal", tile="UserType", max_length=10)
@@ -57,3 +57,8 @@ class UserDB(BaseModel):
 class TokenPayload(BaseModel):
     account: str = None
     exp: int = None
+
+
+class ConfirmCode(BaseModel):
+    code: str
+    user_email: EmailStr    

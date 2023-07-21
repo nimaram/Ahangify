@@ -11,7 +11,7 @@ client = AsyncIOMotorClient(MONGODB_URL)
 # database config
 database = client.Ahangify
 UsersCollection = database.Users
-JwtTokensCollection = database.jwt_tokens
+VerificationCode = database.VerificationCode
 
 # check if there is a repeated username or email
 async def check_repeated_username_or_email(user: UserSignUpSchema) -> bool | dict:
