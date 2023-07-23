@@ -62,3 +62,8 @@ class TokenPayload(BaseModel):
 class ConfirmCode(BaseModel):
     code: str
     user_email: EmailStr    
+
+
+class TokenBlacklist(BaseModel):
+    token: str = None
+    exp: int = None    

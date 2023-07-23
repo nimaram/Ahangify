@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import auth
+from decouple import config
 
 # App object
 app = FastAPI()
 app.include_router(auth.router, tags=['users'])
-
-origins = ["https://localhost:8000"]
+origins = [f"{config('BASE_SITE')}"]
 
 app.add_middleware(
     CORSMiddleware,

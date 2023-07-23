@@ -4,12 +4,12 @@ from jose import jwt, JWTError
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Annotated
 from fastapi import Depends, HTTPException, status
-from database import UsersCollection
+from database import UsersCollection, token_blacklist
 from schemas.models import UserDB
 from .hash import verify_password
 from schemas.models import TokenPayload
 from datetime import datetime
-
+from fastapi.responses import RedirectResponse
 
 JWT_SECRET = config("SECRET_KEY")
 JWT_ALGORITHM = config("JWT_ALGORITHM")
@@ -17,6 +17,13 @@ oauth2_scheme = OAuth2PasswordBearer(
      tokenUrl="/api/sign-in",
      scheme_name="user_login_schema"
 )
+
+async def check_token_valid(token: str):
+    check_token = await token_blacklist.find_one({"token": token})
+    if check_token:
+        return False
+    return True
+
 
 def create_access_token(data: dict, expires: timedelta | None = None) -> str:
     to_encode = data.copy()
@@ -78,6 +85,7 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
 
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     try:
+        global payload
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         email: str = payload.get("account")
         if email is None:
@@ -86,7 +94,9 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
 
         if datetime.fromtimestamp(token_data.exp) < datetime.utcnow():
             raise HTTPException(detail="Token expired", status_code=status.HTTP_401_UNAUTHORIZED)      
-
+        check_res = await check_token_valid(token)
+        if check_res != True:
+            return check_res
     except JWTError:
         raise HTTPException(detail="Could not validate credentials or token maybe expired", status_code=status.HTTP_403_FORBIDDEN)    
     user = await get_user(email=email)
