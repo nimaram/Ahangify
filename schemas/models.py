@@ -17,20 +17,12 @@ class SongSchema(BaseModel):
     producer: Optional[list | None] = None
     uploaded_by: Optional[str]
 
-class AlbumSchema(BaseModel):
-    name: str
-    description: Optional[str | None] = Field(None, title="Description of the album")
-    cover: str
-    songs: list = []
-    singer: str
-
 
 # Account part 
 
 class OTPSettings(BaseModel):
     otp_status: bool = False
     secret: str = ""
-
 
 
 class UserSignUpSchema(BaseModel):
@@ -57,7 +49,7 @@ class UserSignUpSchema(BaseModel):
             "username": "John",
             "email": "John@email.com",
             "password": "123456",
-            "user_type": "normal"
+            "user_type": "disabled"
         }
 
 

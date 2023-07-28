@@ -19,6 +19,9 @@ oauth2_scheme = OAuth2PasswordBearer(
 )
 
 async def check_token_valid(token: str):
+    """
+    Checks if the token was blacklisted before or not
+    """
     check_token = await token_blacklist.find_one({"token": token})
     if check_token:
         return False
@@ -26,6 +29,9 @@ async def check_token_valid(token: str):
 
 
 def create_access_token(data: dict, expires: timedelta | None = None) -> str:
+    """
+    Creates access token for the user
+    """
     to_encode = data.copy()
     if expires:
         expire = datetime.utcnow() + expires
@@ -37,6 +43,9 @@ def create_access_token(data: dict, expires: timedelta | None = None) -> str:
 
 
 def create_refresh_token(data: dict, expires: timedelta | None = None) -> str:
+    """
+    Creates refresh token for the user
+    """
     to_encode = data.copy()
     if expires:
         expire = datetime.utcnow() + expires
@@ -49,6 +58,9 @@ def create_refresh_token(data: dict, expires: timedelta | None = None) -> str:
 
 
 async def get_user(email: str):
+    """
+    Gets the user's instance with the given email
+    """
     user = await UsersCollection.find_one({"email": email})
     if user:
         return UserDB(**user)
@@ -56,6 +68,9 @@ async def get_user(email: str):
 
 
 async def authenticate_user(email: str, password: str):
+    """
+    Returns and authenticates the user's instance with given password and email
+    """
     user = await get_user(email)
     if not user:
         return False
@@ -65,6 +80,9 @@ async def authenticate_user(email: str, password: str):
 
 
 async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+    """
+    Generates access token and refresh token 
+    """
     user = await authenticate_user(form_data["username"], form_data["password"])
     if not user:
         raise HTTPException(
@@ -84,6 +102,9 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
     
 
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+    """
+    Checks if the user's logged before or not
+    """
     try:
         global payload
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])

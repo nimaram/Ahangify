@@ -1,4 +1,4 @@
-from fastapi import HTTPException, status, APIRouter, Body, Depends, Header, Path, Query
+from fastapi import HTTPException, status, APIRouter, Body, Depends, Header, Path
 from schemas.models import(
      UserSignUpSchema,
      UserDB,
@@ -41,27 +41,47 @@ from qrcode.image.styledpil import StyledPilImage
 import io
 from fastapi.responses import StreamingResponse
 from fastapi.background import BackgroundTasks 
-from pydantic import Field
 import base64
 import string
 import secrets
 
 
+# basic setup for app
 alphabet = string.ascii_letters + string.digits
 security = HTTPBearer()
-
 router = APIRouter()
 
 # built-in fuctions
 async def is_otp_correct(otp: int, secret: str):
+    """
+    Checks if two factor code is correct or not
+    """
     sec_n = base64.b32encode(f"{secret}".encode('ascii'))
     tk = pyotp.TOTP(sec_n)
     return tk.verify(otp)
 
 
 
+async def update_passowrd_util(data: Optional[ResetPasswordData], reset_token: dict, uid: uuid.UUID) -> dict:
+    """
+    Updates user's password with new given password
+    """
+    hashed_password = get_password_hash(data.password)
+    await UsersCollection.update_one({"email": reset_token.get("email")}, {"$set": {"password": hashed_password}})
+    await reset_password_tokens.delete_one({"reset_token": uid})
+    return {
+        "message": "You've changed your password successfully!"
+    }
+
+
+
+
+
 @router.get("/api/generate-otp", tags=["users"])
 async def generate_otp_code(background_tasks: BackgroundTasks, user: UserDB = Depends(get_current_user)):
+    """
+    Generates a QR barcode that user should scan it in authenticator apps to generate two factor codes
+    """
     user_set = user.user_settings.get("otp_settings")
     chck = user_set["otp_status"]
     if chck == False:
@@ -81,6 +101,9 @@ async def generate_otp_code(background_tasks: BackgroundTasks, user: UserDB = De
         return StreamingResponse(buf, media_type="image/png")
 
 async def check_authentication(auth: Optional[str | None] = Header(alias="Authorization", default="", title="Auth key", description="Do not enter anything in swagger!")):
+    """
+    Checks if the user has logged in before or not
+    """
     try:
         jwt_token = auth.replace("Bearer ", "")
         payload = jwt.decode(jwt_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
@@ -101,6 +124,9 @@ async def check_authentication(auth: Optional[str | None] = Header(alias="Author
 
 @router.post("/api/sign-up", tags=["users"], status_code=status.HTTP_201_CREATED)
 async def user_sign_up(msg: Annotated[dict, Depends(check_authentication)], background_tasks: BackgroundTasks, user: Annotated[UserSignUpSchema, Body()] = None):
+    """
+    Register a new user with given data
+    """
     if msg.get("auth_status") == True:
         return RedirectResponse("http://localhost:8000/", status_code=status.HTTP_302_FOUND)    
     check_point = await check_repeated_username_or_email(user)
@@ -111,7 +137,6 @@ async def user_sign_up(msg: Annotated[dict, Depends(check_authentication)], back
         setattr(user, 'user_type', 'disabled')
         user.user_settings["otp_settings"] = {"otp_status": False, "secret": f"{''.join(secrets.choice(alphabet) for i in range(12))}"}
         user_response = await UsersCollection.insert_one(user.model_dump())
-
         # send a verification email
         verification_code = give_code()
         message = MessageSchema(
@@ -127,7 +152,6 @@ async def user_sign_up(msg: Annotated[dict, Depends(check_authentication)], back
         }
         await VerificationCode.insert_one(data_code)
         background_tasks.add_task(mail_service.send_message, message)
-
         if user_response:
             data = {
                 "username": user.email,
@@ -143,6 +167,9 @@ async def user_sign_up(msg: Annotated[dict, Depends(check_authentication)], back
 
 @router.post("/api/sign-in", tags=["users"], status_code=status.HTTP_200_OK)
 async def user_sign_in(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], code: Annotated[int | None, Body()] = None):
+    """
+    Create access token and refresh token for user 
+    """
     data = {
         "username": form_data.username,
         "password": form_data.password
@@ -160,7 +187,10 @@ async def user_sign_in(form_data: Annotated[OAuth2PasswordRequestForm, Depends()
 
 
 @router.post("/api/refresh-token", tags=["users"], status_code=status.HTTP_200_OK)
-async def refresh_token(refresh_token: str = Body(...)):
+async def refresh_token(refresh_token: str = Body()):
+    """
+    Generates new refresh and access token
+    """
     try:
         payload = jwt.decode(refresh_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         token_data = TokenPayload(**payload)
@@ -174,13 +204,12 @@ async def refresh_token(refresh_token: str = Body(...)):
         "refresh_token": create_refresh_token({"account": user.email})
     }
 
-@router.get("/api/get-user-type", tags=["users"], status_code=status.HTTP_200_OK, summary="This api returns account's type")
-async def get_user_type(current_user: Annotated[UserDB, Depends(get_current_user)]):
-    return current_user.user_type
-
 
 @router.post("/api/confirm-account-via-code", tags=["users"], status_code=status.HTTP_202_ACCEPTED)
 async def confirm_account(code: Annotated[str, Body()], current_user: Annotated[UserDB, Depends(get_current_user)]):
+    """
+    Changes account type to normal if the user sends a right code
+    """
     if current_user.user_type != "disabled":
         return RedirectResponse("http://localhost:8000/api/sign-in", status_code=status.HTTP_302_FOUND)
     verification_code = await VerificationCode.find_one({"account": current_user.email})
@@ -197,6 +226,9 @@ async def confirm_account(code: Annotated[str, Body()], current_user: Annotated[
 
 @router.post("/api/sign-out", tags=["users"], status_code=status.HTTP_204_NO_CONTENT)
 async def sign_out_user(base: HTTPAuthorizationCredentials= Depends(security)):
+    """
+    Flags the current using token as blacklisted one
+    """
     token = base.credentials
     check_res = await check_token_valid(token)
     if check_res != True:
@@ -217,7 +249,6 @@ async def sign_out_user(base: HTTPAuthorizationCredentials= Depends(security)):
         raise HTTPException(detail="User not found", status_code=status.HTTP_404_NOT_FOUND)
     data = TokenBlacklist(token=token, exp=payload.get("exp"))
     token_exists = await token_blacklist.find_one({"token": token})
-    print(token_exists)
     if token_exists:
         raise HTTPException(detail="Something went wrong", status_code=status.HTTP_400_BAD_REQUEST)
 
@@ -225,7 +256,10 @@ async def sign_out_user(base: HTTPAuthorizationCredentials= Depends(security)):
 
 
 @router.post("/api/forgot-password", tags=["users"], status_code=status.HTTP_200_OK)
-async def reset_password_account(check: Annotated[dict, Depends(check_authentication)], v: Annotated[ResetPasswordRequest, Body()]):
+async def reset_password_account(background_tasks: BackgroundTasks, check: Annotated[dict, Depends(check_authentication)], v: Annotated[ResetPasswordRequest, Body()]):
+    """
+    Sends a reset token email to the user for resetting the password
+    """
     if check.get("auth_status") == True:
         return RedirectResponse("http://localhost:8000/", status_code=status.HTTP_302_FOUND)  
     user = await get_user(email=v.email)
@@ -247,15 +281,19 @@ async def reset_password_account(check: Annotated[dict, Depends(check_authentica
             body=f"link: http://localhost:8000/reset-password/{reset_token}",
             subtype=MessageType.html
         )
-    await mail_service.send_message(message)
+    background_tasks.add_task(mail_service.send_message, message)
 
     return {
         "message": "Reset password link sent successfully to your email!"
     }
 
 
+
 @router.patch("/api/reset-password/{uid}", tags=["users"], status_code=status.HTTP_202_ACCEPTED)
-async def update_user_password(check: Annotated[dict, Depends(check_authentication)], uid: Annotated[str, Path()], data: Optional[ResetPasswordData]):
+async def update_user_password(background_tasks: BackgroundTasks, check: Annotated[dict, Depends(check_authentication)], uid: Annotated[str, Path()], data: Optional[ResetPasswordData], code: Annotated[int | None, Body()] = None):
+    """
+    Updates the user's password with the given new password
+    """
     if check.get("auth_status") == True:
         return RedirectResponse("http://localhost:8000/", status_code=status.HTTP_303_SEE_OTHER)    
     reset_token = await reset_password_tokens.find_one({"reset_token": uid})
@@ -263,22 +301,36 @@ async def update_user_password(check: Annotated[dict, Depends(check_authenticati
         if reset_token.get("expired_at") <= datetime.utcnow():
             raise HTTPException(detail="Token is expired or invalid!", status_code=status.HTTP_400_BAD_REQUEST)
         else:
-            if data.password == data.repeated_password:
-                hashed_password = get_password_hash(data.password)
-                await UsersCollection.update_one({"email": reset_token.get("email")}, {"$set": {"password": hashed_password}})
-                await reset_password_tokens.delete_one({"reset_token": uid})
-                message = MessageSchema(
-                 subject="رمز شما با موفقیت عوض شد!",
-                 recipients=[f"{reset_token.get('email')}"],
-                 body="",
-                 subtype=MessageType.html
-                )
-                await mail_service.send_message(message)
-                return {
-                    "message": "You've changed your password successfully!"
-                }
+            user = await UsersCollection.find_one({"email": reset_token.get("email")})
+            user_otp = user.get("user_settings")["otp_settings"]
+            if user_otp["otp_status"] == False:
+                if data.password == data.repeated_password:
+                    response = await update_passowrd_util(data, reset_token, uid)
+                    message = MessageSchema(
+                    subject="رمز شما با موفقیت عوض شد!",
+                    recipients=[f"{reset_token.get('email')}"],
+                    body="",
+                    subtype=MessageType.html
+                    )
+                    background_tasks.add_task(mail_service.send_message, message)
+                    return response
+                else:
+                    raise HTTPException(detail="Passwords do not match!", status_code=status.HTTP_400_BAD_REQUEST)
             else:
-                raise HTTPException(detail="Passwords do not match!", status_code=status.HTTP_400_BAD_REQUEST)
+                if not code:
+                    raise HTTPException(detail="2FA code needed for this action.", status_code=status.HTTP_400_BAD_REQUEST)
+                elif not await is_otp_correct(int(code), user_otp["secret"]):
+                    raise HTTPException("Wrong 2FA code.", status_code=status.HTTP_400_BAD_REQUEST)
+                else:
+                    response = await update_passowrd_util(data, reset_token, uid)
+                    message = MessageSchema(
+                    subject="رمز شما با موفقیت عوض شد!",
+                    recipients=[f"{reset_token.get('email')}"],
+                    body="",
+                    subtype=MessageType.html
+                    )
+                    background_tasks.add_task(mail_service.send_message, message)
+                    return response  
     else:
         raise HTTPException(detail="Not Found!", status_code=status.HTTP_404_NOT_FOUND)    
 
