@@ -1,21 +1,10 @@
 from pydantic import BaseModel, Field, EmailStr, validator
-from fastapi import Path
-from typing import Optional
-import uuid
+from typing import Optional, Any
 from datetime import datetime
-
-# Song part 
-
-class SongSchema(BaseModel):
-    title: str
-    slug: str
-    description: Optional[str | None] = Field(None, title="Description of the song")
-    file: str
-    duration: float = Path(gt=0, title="Duration")
-    listeners: int = Path(ge=0, title="Listeners")
-    singer: list = []
-    producer: Optional[list | None] = None
-    uploaded_by: Optional[str]
+from fastapi import Form, status
+from pydantic import ValidationError
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import HTTPException
 
 
 # Account part 
@@ -30,7 +19,8 @@ class UserSignUpSchema(BaseModel):
     email: EmailStr
     password: str = Field(title="Password", max_length=100, min_length=5)
     repeated_password: str = Field(title="RepeatedPassword", max_length=100, min_length=5)
-    user_type: Optional[str] = Field("normal", tile="UserType", max_length=10)
+    user_type: Optional[str] = Field("disabled", tile="UserType", max_length=10)
+    permissions: Optional[list[str]] = ["users:general"]
     user_settings: Optional[dict] = {
         "otp_settings": Optional[OTPSettings]
     }
@@ -58,6 +48,7 @@ class UserDB(BaseModel):
     email: str
     password: str
     user_type: str
+    permissions: list
     user_settings: dict
 
 
@@ -73,7 +64,7 @@ class ConfirmCode(BaseModel):
 
 class TokenBlacklist(BaseModel):
     token: str = None
-    exp: int = None    
+    exp: datetime = None    
 
 
 class ResetPasswordRequest(BaseModel):
@@ -98,3 +89,29 @@ class ResetPasswordData(BaseModel):
     #     if 'password' in values and value != values['password']:
     #         raise ValueError("Passwords do not match")
     #     return value
+
+
+# core part
+class SongSchema(BaseModel):
+    title: str = Field(title="Your song's title")
+    slug: Optional[str] = ""
+    description: Optional[str | None] = Field(None, title="Description of the song")
+    file_slug: Optional[str] = "" 
+    duration: Optional[int] = 0
+    listeners: Optional[int] = 0
+    singer: Optional[list[str] | None] = None
+    producer: Optional[list[str] | None] = None
+    uploaded_by: Optional[Any] = "nobody!"
+    created_at: Optional[datetime | None] = None
+    
+
+def checker(data: str = Form(...)):
+    try:
+        model = SongSchema.model_validate_json(data)
+    except ValidationError as e:
+        raise HTTPException(
+            detail=jsonable_encoder(e.errors()),
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+    return model    

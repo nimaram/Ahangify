@@ -14,6 +14,7 @@ UsersCollection = database.Users
 VerificationCode = database.VerificationCode
 token_blacklist = database.token_blacklist
 reset_password_tokens = database.reset_password_tokens
+Song = database.Song
 
 # check if there is a repeated username or email
 async def check_repeated_username_or_email(user: UserSignUpSchema) -> bool | dict:

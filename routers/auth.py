@@ -136,6 +136,8 @@ async def user_sign_up(msg: Annotated[dict, Depends(check_authentication)], back
         del(user.repeated_password)
         setattr(user, 'user_type', 'disabled')
         user.user_settings["otp_settings"] = {"otp_status": False, "secret": f"{''.join(secrets.choice(alphabet) for i in range(12))}"}
+        user.created_at = datetime.utcnow()
+        user.permissions = ["users:general"]
         user_response = await UsersCollection.insert_one(user.model_dump())
         # send a verification email
         verification_code = give_code()
@@ -166,7 +168,7 @@ async def user_sign_up(msg: Annotated[dict, Depends(check_authentication)], back
 
 
 @router.post("/api/sign-in", tags=["users"], status_code=status.HTTP_200_OK)
-async def user_sign_in(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], code: Annotated[int | None, Body()] = None):
+async def user_sign_in(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], code: Annotated[int | None, Body()] = 0):
     """
     Create access token and refresh token for user 
     """
@@ -232,7 +234,7 @@ async def sign_out_user(base: HTTPAuthorizationCredentials= Depends(security)):
     token = base.credentials
     check_res = await check_token_valid(token)
     if check_res != True:
-         return RedirectResponse("http://localhost:8000/api/sign-in", status_code=status.HTTP_302_FOUND)
+         return RedirectResponse("http://localhost:8000/api/sign-in", status_code=status.HTTP_303_SEE_OTHER)
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         email: str = payload.get("account")

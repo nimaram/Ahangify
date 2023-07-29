@@ -4,9 +4,9 @@ from routers import auth, core
 from decouple import config
 from contextlib import asynccontextmanager
 from fastapi_utils.tasks import repeat_every
-from database import UsersCollection, reset_password_tokens, VerificationCode
+from database import UsersCollection, reset_password_tokens, VerificationCode, token_blacklist
 from datetime import datetime, timedelta
- 
+from fastapi.staticfiles import StaticFiles
 
 
 
@@ -21,6 +21,7 @@ async def check_and_delete_invalid_data() -> None:
             await UsersCollection.delete_many({"user_type": "disabled", "created_at": {"$lte": datetime.utcnow() - timedelta(minutes=10)}})
             await VerificationCode.delete_many({"created_at": {"$lte": datetime.utcnow() - timedelta(minutes=10)}})
             await reset_password_tokens.delete_many({"expired_at": {"$lte": datetime.utcnow()}})
+            await token_blacklist.delete_many({"exp": {"$lte": datetime.utcnow()}})
         except:
             raise ValueError("Can't connect to the database, or wrong data(0xEDC200)")
 
@@ -40,7 +41,7 @@ async def lifespan(app: FastAPI):
 # App object
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth.router, tags=["users"])
-app.include_router(core.router, tags=["general"])
+app.include_router(core.router, tags=["artist_panel"])
 origins = [f"{config('BASE_SITE')}"]
 
 

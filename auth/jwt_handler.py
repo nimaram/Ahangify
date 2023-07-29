@@ -9,7 +9,7 @@ from schemas.models import UserDB
 from .hash import verify_password
 from schemas.models import TokenPayload
 from datetime import datetime
-from fastapi.responses import RedirectResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 JWT_SECRET = config("SECRET_KEY")
 JWT_ALGORITHM = config("JWT_ALGORITHM")
@@ -17,6 +17,10 @@ oauth2_scheme = OAuth2PasswordBearer(
      tokenUrl="/api/sign-in",
      scheme_name="user_login_schema"
 )
+
+
+security = HTTPBearer()
+
 
 async def check_token_valid(token: str):
     """
@@ -103,7 +107,7 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
 
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     """
-    Checks if the user's logged before or not
+    Checks if the user's logged in or not
     """
     try:
         global payload
@@ -125,3 +129,21 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         raise HTTPException(detail="User not found", status_code=status.HTTP_404_NOT_FOUND)
     
     return user
+
+
+class PermissionChecker:
+    def __init__(self, required_permissions: list[str]) -> None:
+        self.required_permissions = required_permissions
+
+    async def __call__(self, base: HTTPAuthorizationCredentials = Depends(security)) -> None | UserDB:
+        token = base.credentials
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        email: str = payload.get("account")
+        user = await get_user(email=email)
+        for r_perm in self.required_permissions:
+            if r_perm not in user.permissions:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail='Not found!'
+                )
+        return user
