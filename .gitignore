@@ -5,6 +5,7 @@
 env
 venv
 *.log
+test.html
 dll_app_storage
 
 # caches

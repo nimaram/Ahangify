@@ -42,13 +42,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth.router, tags=["users"])
 app.include_router(core.router, tags=["artist_panel"])
-origins = [f"{config('BASE_SITE')}"]
 
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins = origins,
+    allow_origins = ["*"],
     allow_credentials = True,
     allow_methods = ["*"],
     allow_headers = ["*"]
